@@ -13,8 +13,22 @@ function DV.PRE.simulate()
 
    -- A real hand is being played: keep showing the preview that was on screen (it is reset after scoring).
    if DV.PRE.real_hand_in_flight and DV.PRE.real_hand_in_flight() then
+      -- Look again shortly: if the player already picked new cards while the old hand was clearing off
+      -- the table, they still need a preview once it is done (bounded, so it can never loop forever).
+      if not DV.PRE.retry_queued and (DV.PRE.retry_count or 0) < 40 and DV.PRE.enabled() then
+         DV.PRE.retry_queued = true
+         DV.PRE.retry_count = (DV.PRE.retry_count or 0) + 1
+         G.E_MANAGER:add_event(Event({trigger = "after", delay = 0.3, blocking = false, blockable = false,
+            func = function()
+               DV.PRE.retry_queued = nil
+               local d = DV.PRE.simulate()
+               if d then DV.PRE.data = d end
+               return true
+            end}))
+      end
       return DV.PRE.data or {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
    end
+   DV.PRE.retry_count = 0
 
    if G.SETTINGS.DV.hide_face_down then
       for _, card in ipairs(G.hand.highlighted) do
