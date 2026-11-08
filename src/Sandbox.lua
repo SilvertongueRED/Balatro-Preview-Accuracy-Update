@@ -552,6 +552,16 @@ function SB.can_run()
    then return false, "game not ready" end
    if G.SETTINGS and G.SETTINGS.paused then return false, "paused" end
    if G.play.cards[1] then return false, "play area busy" end
+   -- A real hand is being played right now: never run a simulated one in the middle of it.
+   if G.STATES and G.STATE == G.STATES.HAND_PLAYED then return false, "real hand in progress" end
+   local started = DV.PRE.real_play_started
+   if started then
+      if G.TIMERS and G.TIMERS.REAL and G.TIMERS.REAL - started > 20 then
+         DV.PRE.real_play_started = nil -- Safety: never stay blocked if the hand never finished scoring.
+      else
+         return false, "real hand in progress"
+      end
+   end
    if #G.hand.highlighted < 1 then return false, "nothing selected" end
    return true
 end

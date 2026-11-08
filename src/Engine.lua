@@ -85,8 +85,10 @@ end
 
 function DV.PRE.audit_before_play()
    local a = DV.PRE.audit
+   -- A simulated play (the preview's own hidden test play) must never touch the record of a real one:
+   if DV.PRE.SB and DV.PRE.SB.active then return end
    a.pending = nil
-   if DV.PRE.SB and DV.PRE.SB.active then return end -- A simulated play, not a real one.
+   DV.PRE.real_play_started = G.TIMERS and G.TIMERS.REAL or 0
    if not DV.PRE.setting("audit_log", true) then return end
    if not DV.PRE.data or not DV.PRE.data.score then return end
    if G.SETTINGS.DV.manual_preview and not DV.PRE.previewing then return end -- No preview was on screen.
@@ -105,10 +107,11 @@ end
 
 function DV.PRE.audit_after_eval()
    local a = DV.PRE.audit
+   if DV.PRE.SB and DV.PRE.SB.active then return end
+   DV.PRE.real_play_started = nil -- The real hand has reached scoring; previews may run again.
    local pending = a.pending
    a.pending = nil
    if not pending then return end
-   if DV.PRE.SB and DV.PRE.SB.active then return end
 
    local ok, actual = pcall(function()
       if SMODS and SMODS.calculate_round_score then return SMODS.calculate_round_score() end
@@ -127,6 +130,7 @@ function DV.PRE.audit_after_eval()
 
    if matched then a.matched = a.matched + 1 else a.mismatched = a.mismatched + 1 end
 
+   local ms = DV.PRE.SB and DV.PRE.SB.stats and DV.PRE.SB.stats.last_ms or 0
    local note = pending.note and (" why=" .. tostring(pending.note):gsub("[\r\n]+", " "):sub(1, 300)) or ""
    local line = string.format("%s %s hand=%s engine=%s previewed=%s actual=%s %s%s",
       os.date("%Y-%m-%d %H:%M:%S"), matched and "OK  " or "DIFF", tostring(pending.hand), pending.engine,
