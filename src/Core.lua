@@ -11,6 +11,11 @@ function DV.PRE.simulate()
    then return {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
    end
 
+   -- A real hand is being played: keep showing the preview that was on screen (it is reset after scoring).
+   if DV.PRE.real_hand_in_flight and DV.PRE.real_hand_in_flight() then
+      return DV.PRE.data or {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
+   end
+
    if G.SETTINGS.DV.hide_face_down then
       for _, card in ipairs(G.hand.highlighted) do
          if card.facing == "back" then return nil end

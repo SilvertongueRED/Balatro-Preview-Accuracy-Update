@@ -83,6 +83,20 @@ local function tonum(x)
    return x or 0
 end
 
+-- True from the moment Play is pressed until the hand reaches scoring. During that time the selected
+-- cards are leaving the hand, so nothing may be re-simulated and the preview must stay as it was.
+function DV.PRE.real_hand_in_flight()
+   local started = DV.PRE.real_play_started
+   if started then
+      if G.TIMERS and G.TIMERS.REAL and G.TIMERS.REAL - started > 20 then
+         DV.PRE.real_play_started = nil -- Safety: never stay blocked if the hand never finished scoring.
+      else
+         return true
+      end
+   end
+   return (G.play and G.play.cards and G.play.cards[1] ~= nil) or false
+end
+
 function DV.PRE.audit_before_play()
    local a = DV.PRE.audit
    -- A simulated play (the preview's own hidden test play) must never touch the record of a real one:
