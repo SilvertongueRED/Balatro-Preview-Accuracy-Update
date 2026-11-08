@@ -22,7 +22,7 @@ function DV.PRE.simulate()
       end
    end
 
-   return DV.SIM.run()
+   return DV.PRE.run_engine()
 end
 
 --
@@ -30,12 +30,20 @@ end
 --
 
 function DV.PRE.add_update_event(trigger)
+   -- Nothing may react to the accuracy engine's own simulated plays:
+   if DV.PRE.SB and DV.PRE.SB.active then return end
+
    local function sim_func()
+      DV.PRE.update_queued = nil
       DV.PRE.data = DV.PRE.simulate()
       return true
    end
    if DV.PRE.enabled() then
       if not G.SETTINGS.DV.manual_preview then
+         -- Several triggers in one go (eg. unhighlighting five cards) only need one simulation,
+         -- which sees the latest state when it runs. The timestamp guards against a cleared queue.
+         if DV.PRE.update_queued and (G.TIMERS.REAL - DV.PRE.update_queued) < 0.5 then return end
+         DV.PRE.update_queued = G.TIMERS.REAL
          G.E_MANAGER:add_event(Event({trigger = trigger, func = sim_func}))
       else
          if DV.PRE.previewing then
@@ -85,6 +93,7 @@ function CardArea:update(dt)
 end
 
 function DV.PRE.update_on_card_order_change(cardarea)
+   if DV.PRE.SB and DV.PRE.SB.active then return end
    if #cardarea.cards == 0 or
       not (G.STATE == G.STATES.SELECTING_HAND or
            G.STATE == G.STATES.DRAW_TO_HAND or
@@ -133,6 +142,7 @@ end
 --
 
 function DV.PRE.add_reset_event(trigger)
+   if DV.PRE.SB and DV.PRE.SB.active then return end
    local function reset_func()
       DV.PRE.data = {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
       return true
@@ -145,7 +155,15 @@ end
 local orig_eval = G.FUNCS.evaluate_play
 function G.FUNCS.evaluate_play(e)
    orig_eval(e)
+   if DV.PRE.audit_after_eval then DV.PRE.audit_after_eval() end
    DV.PRE.add_reset_event("after")
+end
+
+-- Remember what was previewed at the moment the player presses Play, for the accuracy audit:
+local orig_play = G.FUNCS.play_cards_from_highlighted
+function G.FUNCS.play_cards_from_highlighted(e)
+   if DV.PRE.audit_before_play then DV.PRE.audit_before_play() end
+   return orig_play(e)
 end
 
 local orig_discard = G.FUNCS.discard_cards_from_highlighted

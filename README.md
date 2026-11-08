@@ -1,62 +1,44 @@
-<h1 align="center">Divvy's Preview for Balatro</h1>
-
-<div align="center">
-
-![Version](https://img.shields.io/badge/latest-v3.2-blue.svg)
-![GitHub License](https://img.shields.io/github/license/DivvyCR/Balatro-Preview?color=blue)
-
-</div>
-
-<p align="center"><img src="gifs/DVPreview_Demo-1.gif" style="width:100%" /></p>
+<h1 align="center">Divvy's Preview for Balatro (Accuracy Update)</h1>
 
 <p align="center">
-<b>Simulate the score and the dollars that you will get by playing the selected cards!</b>
+<b>Preview the score and the dollars you will get by playing the selected cards, for vanilla and modded content alike.</b>
 </p>
 
-## :point_right: Installation
+Fork of [DivvyCr/Balatro-Preview](https://github.com/DivvyCr/Balatro-Preview). Version 5.0.0.
 
- 0. Install [Lovely](https://github.com/ethangreen-dev/lovely-injector)<br>
-   Do you have Steamodded? Then, you probably already have Lovely!
- 1. Download the latest release of this mod, [here](https://github.com/DivvyCr/Balatro-Preview/releases/latest).
- 2. Unzip the downloaded folder to `C:\Users\[USER]\AppData\Roaming\Balatro\Mods`<br>
-   You should have:<br>
-   `...\Balatro\Mods\DVPreview`<br>
-   `...\Balatro\Mods\DVSimulate`<br>
-   `...\Balatro\Mods\DVSettings`<br>
- 3. Launch the game!
+## What changed in 5.0.0
 
-## :point_right: Features
+The original mod re-implemented every joker and card effect by hand, so anything it did not know about (modded jokers, enhancements, editions, seals, consumable effects, boss blinds) previewed wrongly. 5.0.0 adds the **accurate engine**:
 
- - Score and dollar preview **without side-effects**!
- - **Updates in real-time** when changing selected cards, changing joker order, or using consumables!
- - Can preview score even when cards are face-down!
- - Perfectly **predicts random effects**...
- - ... or not! There is an option to show the **minimum and maximum possible scores** when probabilities are involved!
+ - It copies the relevant game state, runs the **real Play Hand flow** of your installed game and mods in a private sandbox with animations, sounds, saving and unlocks switched off, reads the score the game itself computes, and then puts the state back exactly as it was.
+ - Because it runs the code that actually scores your hand, modded content is included automatically, including new mods and new versions, with no per-joker support code.
+ - The state is checked with a fingerprint after every run. If it is ever not restored exactly, the engine switches itself off for the session and the original engine takes over.
+ - If a simulated play fails for any reason (a mod throws an error, an unknown mechanic), the preview falls back to the original engine for that hand. After 3 failures in a row it pauses for a short while.
+ - Scoring done in coroutines (Talisman, balatro-utils/futil async scoring) is run to completion, and futil's async scoring options are turned off only while a simulated play runs.
+ - Min and max are found by re-running the sandbox with every dice roll forced to its extremes.
 
-> [!CAUTION]
-> This mod is currently **incompatible** with other mods.
-> I am in the process of kick-starting the process of making the popular mods compatible.
-> If you are a mod creator, please help me out by reading the *Mod Compatibility* section below.
+## Installation
 
-## :point_right: See It In Action
+ 0. Install [Lovely](https://github.com/ethangreen-dev/lovely-injector) (Steamodded installs it for you).
+ 1. Download the latest zip from [Releases](https://github.com/SilvertongueRED/Balatro-Preview-Accuracy-Update/releases/latest).
+ 2. Unzip it into `%AppData%\Balatro\Mods` so that you have `...\Mods\Balatro-Preview\metadata.json`.
+ 3. Launch the game.
 
-<p align="center"><img src="gifs/DVPreview_Demo-2.gif" style="width:90%" /></p>
-<p align="center">Demonstration for the preview updating in real-time.</p>
+## Settings
 
-&nbsp;
+Open the mod settings (Mods menu, Preview) for:
 
-<p align="center"><img src="gifs/DVPreview_Demo-3.gif" style="width:90%" /></p>
-<p align="center">Demonstration for the preview being hidden with face-down cards.</p>
+ - **Accurate engine**: use the sandbox described above (on by default). Turn it off to use only the original engine.
+ - **Accuracy audit log**: after every real hand, write the previewed score and the actual score to `DVPreview_audit.log` in the Balatro save folder (`%AppData%\Balatro`). Lines say OK or MISMATCH, which engine was used, and the jokers and consumables involved. Useful for reporting a mod that still previews wrongly.
+ - The original options (min and max preview, etc.) still work.
 
-&nbsp;
+## Limits
 
-<p align="center"><img src="gifs/DVPreview_Demo-4.gif" style="width:90%" /></p>
-<p align="center">Demonstration for the preview updating in real-time, pay attention to the dollars.</p>
+ - The preview is only as exact as the game's own scoring code is repeatable. Effects that depend on real time, other players or outside state cannot be previewed.
+ - Random effects are previewed using the game's real next random numbers when that is what would happen. Min and max cover the extremes.
+ - A mod that changes the Play Hand flow in unusual ways may make the sandbox fail; the preview then uses the original engine and the failure is written to the Lovely console.
+ - Each preview costs about a millisecond or two on small tables of cards; very large setups cost more.
 
-## :point_right: Mod Compatibility
+## Credits
 
-By default, this mod **only simulates vanilla jokers**. To support modded jokers, it is necessary to tell this mod how to simulate them, which requires writing a new function for each modded joker. Unfortunately, this is the best way I could see to bypass all animations and side-effects, to calculate exact/min/max previews simultaneously, and to make the simulation efficient. It will be up to the other mod developers to ensure that the preview is accurate for their mods.
-
-### :arrow_forward: How to make your mod compatible?
-
-See [Divvy's Simulation](https://github.com/DivvyCr/Balatro-Simulation?tab=readme-ov-file#how-to-add-modded-jokers)
+Original mod by Divvy C. Accuracy engine by SilvertongueRED.
