@@ -4,7 +4,7 @@
 <b>Preview the score and the dollars you will get by playing the selected cards, for vanilla and modded content alike.</b>
 </p>
 
-Fork of [DivvyCr/Balatro-Preview](https://github.com/DivvyCr/Balatro-Preview). Version 5.0.0.
+Fork of [DivvyCr/Balatro-Preview](https://github.com/DivvyCr/Balatro-Preview). Version 5.0.1.
 
 ## What changed in 5.0.0
 
@@ -42,3 +42,7 @@ Open the mod settings (Mods menu, Preview) for:
 ## Credits
 
 Original mod by Divvy C. Accuracy engine by SilvertongueRED.
+
+## Troubleshooting
+
+If a line in `DVPreview_audit.log` says `engine=legacy`, the accurate engine was not used for that hand. The line ends with `why=` and the reason. The same reason is written once to the Lovely console log as `[DVPreview] accurate engine not used: ...`.

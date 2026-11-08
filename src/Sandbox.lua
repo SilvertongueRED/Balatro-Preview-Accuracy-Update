@@ -30,7 +30,10 @@ DV.PRE.SB = SB
 local next, type, rawget, rawset, getmetatable, pairs, ipairs, pcall, tostring =
       next, type, rawget, rawset, getmetatable, pairs, ipairs, pcall, tostring
 
-SB.BUDGET_TABLES = 400000 -- Abort the snapshot (before touching anything) past this many tables.
+SB.BUDGET_TABLES = 150000 -- Abort the snapshot (before touching anything) past this many tables.
+SB.MAX_DEPTH     = 5      -- How deep below a root the snapshot follows plain tables.
+-- Keys that lead to static data (card definitions, mod objects), never to run state. Not followed.
+SB.skip_keys = {center = true, mod = true, mod_obj = true, atlas_obj = true, original_center = true}
 SB.MAX_PASSES    = 80     -- Max passes over the private event queue per simulated play.
 SB.TIME_BUDGET   = 0.5    -- Seconds one simulated play may take before it is abandoned.
 SB.TIME_WARP     = 1000   -- Seconds added to every game timer per pass, so delayed events fire.
@@ -126,39 +129,51 @@ end
 
 local record_value
 
-local function record_shadow(snap, t, follow_objects)
+local function record_shadow(snap, t, follow_objects, depth)
    snap.seen[t] = true
    local n = snap.n + 1
    snap.n = n
-   if n > SB.BUDGET_TABLES then error("DVPreview snapshot budget exceeded", 0) end
+   if n > SB.BUDGET_TABLES then
+      error("DVPreview snapshot budget exceeded (" .. SB.BUDGET_TABLES .. " tables) under root " ..
+            tostring(snap.root), 0)
+   end
    local shadow = {}
    snap.tabs[n] = t
    snap.shad[n] = shadow
+   local skip, deeper = SB.skip_keys, depth < SB.MAX_DEPTH
    for k, v in next, t do
       shadow[k] = v
-      if type(v) == "table" then record_value(snap, v, follow_objects) end
+      if deeper and type(v) == "table" and not (type(k) == "string" and skip[k]) then
+         record_value(snap, v, follow_objects, depth + 1)
+      end
    end
 end
 
 -- Follow a value found inside a table that is being recorded.
-record_value = function(snap, v, follow_objects)
+record_value = function(snap, v, follow_objects, depth)
    if snap.seen[v] then return end
    if is_object(v) then
       -- Objects reached through plain data are only recorded if the caller asked for it
       -- (and then only their own fields, never the objects they point to).
-      if follow_objects then record_shadow(snap, v, false) end
+      if follow_objects then record_shadow(snap, v, false, depth) end
    else
-      record_shadow(snap, v, follow_objects)
+      record_shadow(snap, v, follow_objects, depth)
    end
 end
 
-local function record_plain(snap, t, follow_objects)
-   if type(t) == "table" and not snap.seen[t] then record_shadow(snap, t, follow_objects or false) end
+local function record_plain(snap, t, follow_objects, root, maxdepth)
+   if type(t) == "table" and not snap.seen[t] then
+      snap.root = root or snap.root
+      record_shadow(snap, t, follow_objects or false, SB.MAX_DEPTH - (maxdepth or SB.MAX_DEPTH))
+   end
 end
 
 -- Record an object's own fields (and the plain tables they hold), never other objects.
-local function record_object(snap, o)
-   if type(o) == "table" and not snap.seen[o] then record_shadow(snap, o, false) end
+local function record_object(snap, o, root)
+   if type(o) == "table" and not snap.seen[o] then
+      snap.root = root or snap.root
+      record_shadow(snap, o, false, 0)
+   end
 end
 
 -- Sprites hold the visible face of a card (set_ability changes them), so they are rolled back too.
@@ -207,15 +222,15 @@ function SB.snapshot()
 
    -- Run state (money, hands, pseudorandom state, hand levels, mod data, ...). Objects found here
    -- (blind, back, tags, last joker, ...) get their own fields recorded as well.
-   record_plain(snap, G.GAME, true)
+   record_plain(snap, G.GAME, true, "G.GAME")
 
    -- Registries that every created node, card and area adds itself to:
-   record_plain(snap, G.I)
-   record_plain(snap, G.MOVEABLES)
-   record_plain(snap, G.STAGE_OBJECTS)
-   record_plain(snap, G.playing_cards)
-   record_plain(snap, G.TIMERS)
-   record_plain(snap, G.P_CENTER_POOLS)
+   record_plain(snap, G.I, false, "G.I", 1)
+   record_plain(snap, G.MOVEABLES, false, "G.MOVEABLES", 1)
+   record_plain(snap, G.STAGE_OBJECTS, false, "G.STAGE_OBJECTS", 2)
+   record_plain(snap, G.playing_cards, false, "G.playing_cards", 1)
+   record_plain(snap, G.TIMERS, false, "G.TIMERS", 1)
+   record_plain(snap, G.P_CENTER_POOLS, false, "G.P_CENTER_POOLS", 1)
    if G.CONTROLLER then
       record_plain(snap, G.CONTROLLER.interrupt)
       record_plain(snap, G.CONTROLLER.locks)
@@ -224,10 +239,10 @@ function SB.snapshot()
    -- Every card and card area in the game, not just the ones this mod knows about:
    if G.I then
       for _, card in ipairs(G.I.CARD or {}) do
-         record_object(snap, card)
+         record_object(snap, card, "G.I.CARD")
          record_sprites(snap, card.children)
       end
-      for _, area in ipairs(G.I.CARDAREA or {}) do record_object(snap, area) end
+      for _, area in ipairs(G.I.CARDAREA or {}) do record_object(snap, area, "G.I.CARDAREA") end
    end
    for _, area in ipairs({G.hand, G.play, G.deck, G.discard, G.jokers, G.consumeables}) do
       record_object(snap, area)
@@ -235,17 +250,17 @@ function SB.snapshot()
 
    -- Scoring parameters (current chips, mult, and mod-added ones):
    if SMODS then
-      for _, param in pairs(SMODS.Scoring_Parameters or {}) do record_object(snap, param) end
-      record_plain(snap, SMODS.last_hand)
-      record_plain(snap, SMODS.drawn_cards)
+      for _, param in pairs(SMODS.Scoring_Parameters or {}) do record_object(snap, param, "SMODS.Scoring_Parameters") end
+      record_plain(snap, SMODS.last_hand, false, "SMODS.last_hand", 3)
+      record_plain(snap, SMODS.drawn_cards, false, "SMODS.drawn_cards", 1)
    end
 
    -- Profile statistics the play pipeline likes to bump (the functions doing it are also stubbed):
    local profile = G.PROFILES and G.SETTINGS and G.PROFILES[G.SETTINGS.profile]
    if profile then
-      record_plain(snap, profile.career_stats)
-      record_plain(snap, profile.hand_usage)
-      record_plain(snap, profile.high_scores)
+      record_plain(snap, profile.career_stats, false, "profile", 2)
+      record_plain(snap, profile.hand_usage, false, "profile", 2)
+      record_plain(snap, profile.high_scores, false, "profile", 2)
    end
 
    -- Plain flags on the main tables (G.STATE, G.STATE_COMPLETE, SMODS.displayed_hand, ...):
@@ -547,7 +562,8 @@ function SB.run()
       SB.cooldown = SB.cooldown - 1
       return nil, "cooling down after repeated failures: " .. tostring(SB.stats.last_error)
    end
-   local can, why = SB.can_run()
+   local ok_can, can, why = pcall(SB.can_run)
+   if not ok_can then return nil, "can_run: " .. tostring(can) end
    if not can then return nil, why end
 
    local want_range = G.SETTINGS and G.SETTINGS.DV and G.SETTINGS.DV.show_min_max
@@ -560,7 +576,12 @@ function SB.run()
       SB.stats.last_error = "snapshot: " .. tostring(snap)
       return nil, SB.stats.last_error
    end
-   local before = SB.fingerprint()
+   local ok_fp, before = pcall(SB.fingerprint)
+   if not ok_fp then
+      SB.stats.failed = SB.stats.failed + 1
+      SB.stats.last_error = "fingerprint: " .. tostring(before)
+      return nil, SB.stats.last_error
+   end
 
    SB.active = true
    local exact, range_runs, err = nil, {}, nil
@@ -580,8 +601,8 @@ function SB.run()
    SB.active = false
 
    -- Verify the rollback; if the game state is not exactly as before, never run again this session.
-   local after = SB.fingerprint()
-   if not ok_restore or after ~= before then
+   local ok_fp2, after = pcall(SB.fingerprint)
+   if not ok_restore or not ok_fp2 or after ~= before then
       SB.disabled = "state was not restored exactly (" .. tostring(restore_err or "fingerprint mismatch") .. ")"
       SB.stats.last_error = SB.disabled
       log("warn", "Accuracy engine switched off for this session: " .. SB.disabled)

@@ -31,6 +31,12 @@ function DV.PRE.run_engine()
          return res
       end
       DV.PRE.engine_note = tostring(ok and err or res)
+      -- Always say why the accurate engine was not used (once per distinct reason):
+      if DV.PRE.engine_note ~= DV.PRE.last_logged_note then
+         DV.PRE.last_logged_note = DV.PRE.engine_note
+         local fn = rawget(_G, "sendWarnMessage")
+         if fn then pcall(fn, "[DVPreview] accurate engine not used: " .. DV.PRE.engine_note, "DVPreview") end
+      end
    end
 
    DV.PRE.engine_used = "legacy"
@@ -91,6 +97,7 @@ function DV.PRE.audit_before_play()
       min = DV.PRE.data.score.min,
       max = DV.PRE.data.score.max,
       engine = DV.PRE.engine_used or "?",
+      note = DV.PRE.engine_used == "legacy" and DV.PRE.engine_note or nil,
       setup = describe_setup(),
       hand = G.GAME.current_round and G.GAME.current_round.current_hand and G.GAME.current_round.current_hand.handname or "?",
    }
@@ -120,10 +127,11 @@ function DV.PRE.audit_after_eval()
 
    if matched then a.matched = a.matched + 1 else a.mismatched = a.mismatched + 1 end
 
-   local line = string.format("%s %s hand=%s engine=%s previewed=%s actual=%s %s",
+   local note = pending.note and (" why=" .. tostring(pending.note):gsub("[\r\n]+", " "):sub(1, 300)) or ""
+   local line = string.format("%s %s hand=%s engine=%s previewed=%s actual=%s %s%s",
       os.date("%Y-%m-%d %H:%M:%S"), matched and "OK  " or "DIFF", tostring(pending.hand), pending.engine,
       show_range and (tostring(tonum(pending.min)) .. ".." .. tostring(tonum(pending.max))) or tostring(tonum(pending.exact)),
-      tostring(tonum(actual)), pending.setup)
+      tostring(tonum(actual)), pending.setup, note)
    a.recent[#a.recent + 1] = line
    if #a.recent > 30 then table.remove(a.recent, 1) end
 
