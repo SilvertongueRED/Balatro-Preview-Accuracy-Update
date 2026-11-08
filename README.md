@@ -4,7 +4,7 @@
 <b>Preview the score and the dollars you will get by playing the selected cards, for vanilla and modded content alike.</b>
 </p>
 
-Fork of [DivvyCr/Balatro-Preview](https://github.com/DivvyCr/Balatro-Preview). Version 5.0.4.
+Fork of [DivvyCr/Balatro-Preview](https://github.com/DivvyCr/Balatro-Preview). Version 5.0.5.
 
 ## What changed in 5.0.0
 

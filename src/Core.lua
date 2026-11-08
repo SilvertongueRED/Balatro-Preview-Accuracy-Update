@@ -4,13 +4,6 @@
 -- ie. whenever the player modifies card selection or card order.
 
 function DV.PRE.simulate()
-   -- Guard against simulating in redundant places:
-   if not (G.STATE == G.STATES.SELECTING_HAND or
-           G.STATE == G.STATES.DRAW_TO_HAND or
-           G.STATE == G.STATES.PLAY_TAROT)
-   then return {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
-   end
-
    -- A real hand is being played: keep showing the preview that was on screen (it is reset after scoring).
    if DV.PRE.real_hand_in_flight and DV.PRE.real_hand_in_flight() then
       -- Look again shortly: if the player already picked new cards while the old hand was clearing off
@@ -29,6 +22,14 @@ function DV.PRE.simulate()
       return DV.PRE.data or {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
    end
    DV.PRE.retry_count = 0
+
+   -- Guard against simulating in redundant places:
+   if not (G.STATE == G.STATES.SELECTING_HAND or
+           G.STATE == G.STATES.DRAW_TO_HAND or
+           G.STATE == G.STATES.PLAY_TAROT)
+   then return {score = {min = 0, exact = 0, max = 0}, dollars = {min = 0, exact = 0, max = 0}}
+   end
+
 
    if G.SETTINGS.DV.hide_face_down then
       for _, card in ipairs(G.hand.highlighted) do
